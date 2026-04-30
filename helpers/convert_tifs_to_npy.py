@@ -1,4 +1,4 @@
-"""Convert tiffs from given directory to npz files.
+"""Convert tiffs from given directory to npy files.
 
 Example usage:
 python convert_tifs_to_npz.py /path/to/your/files tif
@@ -19,7 +19,7 @@ import numpy as np
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Convert all images with a given extension in a directory to .npz files."
+        description="Convert all images with a given extension in a directory to .npy files."
     )
     parser.add_argument(
         "input_dir",
@@ -48,7 +48,7 @@ file_list = [Path(x) for x in glob.glob(str(input_dir) + "/*" + extension.lower(
 print(f"Found {len(file_list)} files with extension {extension} in {input_dir}.")
 
 # Create output dir
-output_dir = (input_dir.parent / f"{input_dir.name}_NPZ")
+output_dir = (input_dir.parent / f"{input_dir.name}_NPY")
 output_dir.mkdir(parents=True, exist_ok=True)
 
 # Now save them again
@@ -56,11 +56,23 @@ for src in file_list:
 
     # Load
     img = iio.imread(src)
+    
+    # In case fiji binary mask, convert
+    if np.all(np.isin(np.unique(img), np.array([0,255]))):
+        print("Converting FIJI binary mask..")
+        img[img==255]=1
 
     # Save    
-    np.savez_compressed(
-        output_dir / f"{src.stem}.npz",
-        image=img
+    # np.savez_compressed(
+    #     output_dir / f"{src.stem}.npz",
+    #     image=img
+    # )
+    
+    # Save to npy
+    np.save(
+        output_dir / f"{src.stem}.npy",
+        img
     )
+
 
 ################################################################################
