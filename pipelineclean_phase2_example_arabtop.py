@@ -6,7 +6,7 @@ a U-Net segmentation model.
 # %% ###########################################################################
 # Libraries
 
-import cheeky_cells.orchestrators.orchestrate_phase2_WIP as o2
+import cheeky_cells.orchestrators.orchestrate_phase2_clean as o2
     # import importlib; importlib.reload(o2)
 
 
@@ -30,12 +30,13 @@ config2 = o2.Phase2Config(
     lbl_suffix = '_tile_seg',
     learning_rate = 1e-3,
     batch_size = 8,
-    # for test run
-    artificial_n=100, 
-    epochs = 30,
+    # for test run (n=100 / e=30 --> 21 mins; .7 mins/epoch)
+    # artificial_n=100, 
+    # epochs = 30,
     # for actual run
-    #artificial_n = 1000, # lower this during tests
-    #epochs = 24,
+    artificial_n = 1000, # 1000, # ±7min/epoch
+    epochs = 120, # 120, # 12 training hours (720 mins) --> ±100 epochs
+    lr_schedule_step_len = 40, # should be epochs/3
     cmap_custom = custom_colormap
 )
 
