@@ -20,9 +20,13 @@ import cheeky_cells.plotting.plotting as pp
 # Configuration
 
 # dataset spcecific config
-OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-output/'
-CURRENT_MODEL = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260501_1518__trained00h21m.pth'
-DATA_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-input/'
+CURRENT_MODEL = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260501_1645__trained12h10m.pth'
+
+#DATA_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-input/'
+#OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-output/'
+# Test set 2
+DATA_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS_NOT-annotated/'
+OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/seg_ORIGINALS_NOT-annotated/'
 
 # Colormap for display of annotation
 custom_colormap_mpl = ListedColormap([
