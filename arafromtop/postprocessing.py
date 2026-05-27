@@ -87,16 +87,12 @@ def process_single_file(
 	labelmask_cleaned[mask_cleaned] = labelmask_shed[mask_cleaned]
         # plt.imshow(labelmask_cleaned, cmap=cmap_random(50))
 
+    # SHOULD BE A FUNCTION
 	# The plotting step is kept separate because it is the only part that needs a
 	# visual representation; the processing itself returns label masks.
 	n_labels = int(np.max(labelmask_cleaned))
 	mycmap = cmap_random(max(n_labels, 1), min_brightness=0.6)
 	regionprops_map = {prop.label: prop for prop in regionprops(labelmask_cleaned)}
-
-	os.makedirs(config4.dir_output, exist_ok=True)
-	output_stem = f"SEG-post_{os.path.splitext(current_segfile)[0]}"
-	output_pdf = os.path.join(config4.dir_output, f"{output_stem}.pdf")
-	output_npz = os.path.join(config4.dir_output, f"{output_stem}.npz")
 
 	with plt.rc_context({"font.size": 6, "font.family": "Arial"}):
 		fig, axs = plt.subplots(1, 2, figsize=(16.8 / 2.54, 8 / 2.54))
@@ -114,10 +110,21 @@ def process_single_file(
 			axs[1].text(xleft, ytop, grid_mapping(lbl_idx), color=mycmap(lbl_idx), fontsize=4, ha="center", va="center")
 
 		plt.tight_layout()
-		if config4.save_pdf:
-			plt.savefig(output_pdf, dpi=config4.dpi)
-		plt.close(fig)
+    # END SHOULD BE A FUNCTION
+	
+    
+    # Prepare output file paths    
+    os.makedirs(config4.dir_output, exist_ok=True)
+	output_stem = f"SEG-post_{os.path.splitext(current_segfile)[0]}"
+	output_pdf = os.path.join(config4.dir_output, f"{output_stem}.pdf")
+	output_npz = os.path.join(config4.dir_output, f"{output_stem}.npz")
+	
+    # save  
+    if config4.save_pdf:
+        plt.savefig(output_pdf, dpi=config4.dpi)
+    plt.close(fig)
 
+    # save post-processed segmask
 	if config4.save_npz:
 		np.savez(output_npz, labelmask_cleaned=labelmask_cleaned, segmask=segmask)
 
