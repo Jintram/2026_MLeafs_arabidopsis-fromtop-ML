@@ -21,18 +21,21 @@ import cheeky_cells.plotting.plotting as pp
 
 # dataset spcecific config
 CURRENT_MODEL = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260501_1645__trained12h10m.pth'
+CURRENT_MODEL = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260524_2309__trained12h04m.pth'
 
+# Test set 1
 #DATA_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-input/'
 #OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-output/'
+
 # Test set 2
 DATA_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS_NOT-annotated/'
-OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/seg_ORIGINALS_NOT-annotated/'
+OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/seg_ORIGINALS_NOT-annotated_2/'
 
 # Colormap for display of annotation
 custom_colormap_mpl = ListedColormap([
         '#000000',
         '#E9BF94',
-        'darkgreen',
+        '#FFFFFF' # 'darkgreen', # changed to white for visibily
     ])
 # set global font-size to 8
 pp.set_global_fontsize(8)
@@ -47,6 +50,8 @@ config3 = o3.Phase3Config(
     data_path_input = DATA_DIR,
     cmap_custom = custom_colormap_mpl,
     fn_plotting = pp.plot_overlay_n_pred,
+    DPI_plots = 1200,
+    extraplottingparams = {'mylinewidths':.01}
 )    
 
 # Collect all files that are to be segmented, store data in metadata
