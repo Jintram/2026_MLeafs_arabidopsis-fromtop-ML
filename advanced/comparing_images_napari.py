@@ -1,5 +1,7 @@
 """This file was used to generate plant seeds for the post-processing.
 
+Also allows easy comparison between two image files (are they aligned?)
+
 """
 
 # %%
@@ -52,5 +54,5 @@ if __name__ == "__main__":
     lbls = show_images_in_napari(path_img1, path_img2)
     
     # now save the lbs to a file
-    np.savez_compressed("plant_seed_mask.npz")
+    np.savez_compressed("plant_seed_mask.npz", lbls=lbls)
     
