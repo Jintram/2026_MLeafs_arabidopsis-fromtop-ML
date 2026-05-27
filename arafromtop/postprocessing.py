@@ -31,7 +31,8 @@ class phase4_config:
     glob_pattern: str = "**/*_seg.npz"
     label_class: int = 2
     dilation_radius: int = 10
-    min_size: int = 600
+    min_size: int = 600 # removes stuff with diameter of 7; ((7+10+10)/2)**2*math.pi 
+    min_size_wholeplant: int = 400 # removes plants smaller 20x20
     gamma: float = 0.5
     save_pdf: bool = True
     save_npz: bool = True
@@ -64,7 +65,7 @@ def render_processed_figure(current_segfile, img_plant_bright, labelmask_cleaned
     # 
     n_labels = int(np.max(labelmask_cleaned))
     mycmap = cmap_random(max(n_labels, 1), min_brightness=0.6)
-    rprops_labelmask = regionprops(labelmask_cleaned)
+    list_rprops_labelmask = {prop.label: prop for prop in regionprops(labelmask_cleaned)}
 
     with plt.rc_context({"font.size": 6, "font.family": "Arial"}):
         fig, axs = plt.subplots(1, 2, figsize=(16.8 / 2.54, 8 / 2.54))
@@ -72,9 +73,9 @@ def render_processed_figure(current_segfile, img_plant_bright, labelmask_cleaned
         axs[0].imshow(img_plant_bright)
         axs[1].imshow(labelmask_cleaned, cmap=mycmap)
 
-        for lbl_idx in range(len(rprops_labelmask)):
+        for lbl_idx, prop in list_rprops_labelmask.items():
             axs[0].contour(labelmask_cleaned == lbl_idx, colors="white", linewidths=0.05)
-            ytop, xleft = rprops_labelmask[lbl_idx].bbox[:2]
+            ytop, xleft = prop.bbox[:2]
             axs[0].plot(xleft, ytop, "s", markersize=5, color="black", markeredgewidth=0)
             axs[0].text(xleft, ytop, grid_mapping(lbl_idx), color=mycmap(lbl_idx), fontsize=4, ha="center", va="center")
 
@@ -113,7 +114,16 @@ def process_single_file(
     # Now retain the large objects from the watershed
     labelmask_cleaned = np.zeros_like(labelmask_shed)
     labelmask_cleaned[mask_cleaned] = labelmask_shed[mask_cleaned]
-
+        # plt.imshow(labelmask_cleaned)
+        
+    # now a second pass, where we'll remove plants if there config.minplantsize (<20**2)
+    labelmask_props = regionprops(labelmask_cleaned)
+    for prop in labelmask_props:
+        lbl=prop.label
+        if prop.area<config4.min_size_wholeplant:
+            labelmask_cleaned[labelmask_cleaned==lbl] = 0
+        # plt.imshow(labelmask_cleaned)
+    
     # now create figure
     fig, n_labels = render_processed_figure(
         current_segfile=current_segfile,
@@ -177,6 +187,7 @@ def process_segmask_directory(
     results = []
     for idx, current_segfile in enumerate(segmask_files):
         # current_segfile = segmask_files[0]
+        # current_segfile = "images/07_DPI_C01 tray5 7dpi§001_TopRGB_2026-01-15T15-36-33.png_seg.npz"
         
         print(f"Processing file {idx}/{len(segmask_files)}; {current_segfile}...")
         

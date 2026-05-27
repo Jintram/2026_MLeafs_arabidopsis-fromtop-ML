@@ -83,8 +83,7 @@ mask_shed_dilated = dilation(labelmask_shed>0, disk(10))
 plt.imshow(mask_shed_dilated)
 
 # now remove objects that are smaller than 600 px^2 
-# removes stuff with diameter of 7;
-# ((7+10+10)/2)**2*math.pi 
+# removes stuff with diameter of 7; ((7+10+10)/2)**2*math.pi 
 # = 572
 mask_cleaned = remove_small_objects(mask_shed_dilated, min_size=600)
 labelmask_cleaned = np.zeros_like(labelmask_shed)
