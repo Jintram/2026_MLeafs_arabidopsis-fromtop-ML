@@ -20,12 +20,12 @@ import cheeky_cells.plotting.plotting as pp
 # Configuration
 
 # dataset spcecific config
-CURRENT_MODEL = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260501_1645__trained12h10m.pth'
+# CURRENT_MODEL = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260501_1645__trained12h10m.pth'
 CURRENT_MODEL = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260524_2309__trained12h04m.pth'
 
 # Test set 1
 #DATA_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-input/'
-#OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-output/'
+#OUTPUT_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/test-output_2/'
 
 # Test set 2
 DATA_DIR = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS_NOT-annotated/'
@@ -71,3 +71,5 @@ o3.segment_all_files(config3,
 
 ################################################################################
 # %% 
+
+
