@@ -243,4 +243,18 @@ plt.contour(lum_mask_warped, colors="red", linewidths=1, alpha=0.5)
 plt.contour(lum_mask_warped_new, colors="blue", linewidths=1, alpha=0.5)
 
 
+# %% Conclusion
+"""
+
+- all three cases work (my own test image, rgb/lum based on original matrix, rgb/lum on new matrix from calib images
+- new matrix shows improvement, due better point extraction
+- checker board pattern could be better
+- more importantly, the field of view isn't entirely covered, leading to large displacement outside where the paper was
+
+(insert some additional claude stuff)
+
+
+"""
+
+
 
