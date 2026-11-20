@@ -98,6 +98,10 @@ tf_ara = np.array([[1.38108321e+00, 3.13548708e-02, 1.16323458e+02],
 path_img_ara_lum = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/luminescence/21_DPI_C01 tray3 21dpi§001_TopES_2026-01-29T15-48-05.png.png"
 path_img_ara_rgb = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/rgb/21_DPI_C01 tray3 21dpi§001_TopRGB_2026-01-29T15-48-05.png.png"
 
+path_img_ara_lum = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/luminescence/21_DPI_C01 tray3 21dpi§001_TopES_2026-01-29T15-48-05.png.png"
+path_img_ara_rgb = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/rgb/21_DPI_C01 tray3 21dpi§001_TopRGB_2026-01-29T15-48-05.png.png"
+
+
 img_ara_rgb = iio.imread(path_img_ara_rgb)
 img_ara_lum = iio.imread(path_img_ara_lum)
 
@@ -115,14 +119,38 @@ tf_ara_m = sk.transform.ProjectiveTransform(matrix=tf_ara)
 # now apply
 img_ara_lum_maxp_warped = sk.transform.warp(img_ara_lum_maxp, tf_ara_m.inverse, output_shape=img_ara_rgb_gray.shape)
 valid_lum = img_ara_lum_maxp_warped > 0
+plt.imshow(img_ara_lum_maxp_warped)
 
 # show next to each other
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 axs[0].imshow(img_ara_rgb_gray, cmap="viridis")
 axs[1].imshow(img_ara_lum_maxp_warped, cmap="viridis")
 
+# %% Warp binary version for display as well
+
+# binarize BEFORE warping (background is exactly lum_minval here)
+lum_mask = img_ara_lum_maxp > lum_minval
+
+# warp the mask with nearest neighbour -> stays strictly 0/1, no edge blending
+lum_mask_warped = sk.transform.warp(lum_mask.astype(float), tf_ara_m.inverse,
+                                    output_shape=img_ara_rgb_gray.shape, order=0) > 0.5
+
+
+# overlay on a fresh figure
+plt.figure(figsize=(8, 8))
+plt.imshow(img_ara_rgb_gray, cmap="Greys")
+#plt.imshow(lum_mask_warped * 1.0, alpha=lum_mask_warped * 1.0, cmap="Reds", vmin=0, vmax=1)
+plt.contour(lum_mask_warped, colors="red", linewidths=1, alpha=0.5)
+
 # show on top of each other, without correction
 plt.imshow(img_ara_rgb_gray, cmap="Greys")
 img_ara_lum_maxp_warped_binary = img_ara_lum_maxp_warped > np.min(img_ara_lum_maxp_warped[valid_lum])
     # plt.imshow(img_ara_lum_maxp_warped_binary)
 plt.imshow(img_ara_lum_maxp_warped_binary*1.0, alpha=img_ara_lum_maxp_warped_binary*1.0, cmap="Reds")
+
+
+
+# %% Re-do the calibration using the original calibration data
+
+
+XXXXX
