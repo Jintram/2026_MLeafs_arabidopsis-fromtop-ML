@@ -109,8 +109,12 @@ lum_minval = np.min(img_ara_lum_maxp)
 plt.imshow(img_ara_rgb_gray)
 plt.imshow(img_ara_lum_maxp>lum_minval)
 
+# convert tf_ara to matrix format 
+tf_ara_m = sk.transform.ProjectiveTransform(matrix=tf_ara)
+
 # now apply
-img_ara_lum_maxp_warped = sk.transform.warp(img_ara_lum_maxp, tf_ara, output_shape=img_ara_rgb_gray.shape)
+img_ara_lum_maxp_warped = sk.transform.warp(img_ara_lum_maxp, tf_ara_m.inverse, output_shape=img_ara_rgb_gray.shape)
+valid_lum = img_ara_lum_maxp_warped > 0
 
 # show next to each other
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
@@ -119,5 +123,6 @@ axs[1].imshow(img_ara_lum_maxp_warped, cmap="viridis")
 
 # show on top of each other, without correction
 plt.imshow(img_ara_rgb_gray, cmap="Greys")
-img_ara_lum_maxp_warped_binary = img_ara_lum_maxp_warped>img_ara_lum_maxp_warped.min()
-plt.imshow(img_ara_lum_maxp_warped_binary, alpha=img_ara_lum_maxp_warped_binary*1.0, cmap="Reds")
+img_ara_lum_maxp_warped_binary = img_ara_lum_maxp_warped > np.min(img_ara_lum_maxp_warped[valid_lum])
+    # plt.imshow(img_ara_lum_maxp_warped_binary)
+plt.imshow(img_ara_lum_maxp_warped_binary*1.0, alpha=img_ara_lum_maxp_warped_binary*1.0, cmap="Reds")
