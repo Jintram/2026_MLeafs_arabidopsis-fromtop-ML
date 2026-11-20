@@ -1,0 +1,113 @@
+
+# Illustration (for slides) of how a transformation matrix moves points.
+# Simple on purpose: a 3x3 grid of points, a shear matrix, and arrows showing
+# where each point goes. (Inverse mapping / interpolation deliberately left out.)
+
+################################################################################
+# %% Libs
+
+import os
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+################################################################################
+# %% Settings
+
+# shear matrix: x' = x + k*y, y' = y
+k = 0.25  # keep < 1 (grid spacing), otherwise transformed points land on other original points
+M = np.array([[1, k],
+              [0, 1]])
+
+# 3x3 grid of points (x, y), away from the origin so all arrows are visible
+xs, ys = np.meshgrid([1, 2, 3], [1, 2, 3])
+pts = np.column_stack([xs.ravel(), ys.ravel()])     # (9, 2)
+pts_new = pts @ M.T                                  # apply M to every point
+
+COLOR_ORIG = "#2a78d6"    # blue
+COLOR_NEW = "#eb6834"     # orange
+COLOR_TEXT = "#333333"
+COLOR_GRID = "#dddddd"
+
+outdir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+
+################################################################################
+# %% Plot function (step 1 = original only, step 2 = with transformation)
+
+FIG_W, FIG_H = 13, 8
+# scales are relative to the original 9-inch-wide figure, so they stay correct when the image
+# is fitted to a slide: 1.5x larger fonts; markers 2x in pt (~1.4x relative, larger would cover the
+# short bottom-row arrows)
+FONT_SCALE = 1.5 * FIG_W / 9
+MARKER_SCALE = 2.0
+MARKER_S = 80 * MARKER_SCALE**2                  # scatter 's' is an area (pt^2)
+ARROW_GAP = np.sqrt(MARKER_S) / 2 + 2            # stop arrow heads at the marker edge (pt)
+
+def fs(size):
+    return size * FONT_SCALE
+
+def arrow(ax, start, end, color, lw=1.5, alpha=1.0, from_marker=False):
+    # from_marker: also start the arrow at the edge of the marker at 'start'
+    ax.annotate("", xy=end, xytext=start,
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=lw, alpha=alpha,
+                                shrinkA=ARROW_GAP if from_marker else 0, shrinkB=ARROW_GAP,
+                                mutation_scale=14))
+
+def plot_transform(show_transformed=True):
+    fig, ax = plt.subplots(figsize=(FIG_W, FIG_H))
+
+    # recessive background grid + axes through the origin
+    ax.set_axisbelow(True)
+    ax.grid(True, color=COLOR_GRID, lw=0.8)
+    ax.axhline(0, color=COLOR_TEXT, lw=1)
+    ax.axvline(0, color=COLOR_TEXT, lw=1)
+
+    # vectors from the origin to the original points
+    for p in pts:
+        arrow(ax, (0, 0), p, COLOR_ORIG, lw=1.2, alpha=0.35)
+    ax.scatter(*pts.T, s=MARKER_S, color=COLOR_ORIG, zorder=3, edgecolor="white", lw=1.5,
+               label="original points")
+
+    if show_transformed:
+        # arrows from each original point to its transformed position
+        for p, q in zip(pts, pts_new):
+            if not np.allclose(p, q):
+                arrow(ax, p, q, COLOR_NEW, lw=1.8, from_marker=True)
+        ax.scatter(*pts_new.T, s=MARKER_S, color=COLOR_NEW, zorder=3, edgecolor="white", lw=1.5,
+                   label="transformed points")
+
+        # show the matrix and equation
+        # (matplotlib mathtext has no matrix support, so write it in monospace)
+        ax.text(1.03, 0.97,
+                f"M = ⎡ 1  {k} ⎤\n    ⎣ 0  1   ⎦\n\nx' = x + {k}·y\ny' = y",
+                transform=ax.transAxes, va="top", ha="left", fontsize=fs(13),
+                family="monospace", color=COLOR_TEXT)
+
+    # same axis limits in both steps, so the slides line up when flipping between them
+    ax.set_xlim(-0.5, 4.5)
+    ax.set_ylim(-0.5, 3.6)
+    ax.set_aspect("equal")
+    ax.set_xticks(range(0, 5))
+    ax.set_yticks(range(0, 4))
+    ax.tick_params(colors=COLOR_TEXT, labelsize=fs(12))
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.set_xlabel("x", fontsize=fs(14), color=COLOR_TEXT)
+    ax.set_ylabel("y", fontsize=fs(14), color=COLOR_TEXT, rotation=0, labelpad=12)
+    ax.set_title("Shear transformation" if show_transformed else "Original points",
+                 fontsize=fs(16), color=COLOR_TEXT)
+    ax.legend(loc="lower left", bbox_to_anchor=(1.01, 0.0), frameon=False, fontsize=fs(12))
+    fig.tight_layout()
+    return fig
+
+################################################################################
+# %% Make + save both steps (two images, handy for a slide build-up)
+
+for step, show in [(1, False), (2, True)]:
+    fig = plot_transform(show_transformed=show)
+    for ext in ["png", "svg"]:
+        fig.savefig(os.path.join(outdir, f"angle_correction_illustration_step{step}.{ext}"),
+                    dpi=300, bbox_inches="tight")
+    plt.show()
+
+# %%

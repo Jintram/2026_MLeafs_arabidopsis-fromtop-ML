@@ -83,7 +83,7 @@ thr2 = sk.filters.threshold_otsu(image2_gray_warped[valid2])
 bin1 = image1_gray < thr1 if DARK_FOREGROUND else image1_gray > thr1
 bin2 = (image2_gray_warped < thr2 if DARK_FOREGROUND else image2_gray_warped > thr2) & valid2
 
-
+plt.figure()
 plt.imshow(bin1, cmap="Reds", alpha=0.5)
 plt.imshow(bin2, cmap="Blues", alpha=0.5)
 
