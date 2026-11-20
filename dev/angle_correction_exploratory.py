@@ -97,12 +97,16 @@ tf_ara = np.array([[1.38108321e+00, 3.13548708e-02, 1.16323458e+02],
                    [1.98864470e-02, 1.38255468e+00, 1.13998417e+03],
                     [1.13790555e-05, 1.43271706e-05, 1.00000000e+00]])
 
-
+# Example 1
 path_img_ara_lum = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/luminescence/21_DPI_C01 tray3 21dpi§001_TopES_2026-01-29T15-48-05.png.png"
 path_img_ara_rgb = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/rgb/21_DPI_C01 tray3 21dpi§001_TopRGB_2026-01-29T15-48-05.png.png"
-
+# Example 2
 path_img_ara_lum = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/luminescence/21_DPI_C01 tray3 21dpi§001_TopES_2026-01-29T15-48-05.png.png"
 path_img_ara_rgb = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/images_CR/rgb/21_DPI_C01 tray3 21dpi§001_TopRGB_2026-01-29T15-48-05.png.png"
+# Example 3 (strong lum signal, best example)
+path_img_ara_lum = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS-all-202604/Images_rosette_detection/21dpi Tray12§001_TopES_2025-06-10T16-23-28.png"
+path_img_ara_rgb = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS-all-202604/Images_rosette_detection/21dpi Tray12§001_TopRGB_2025-06-10T16-23-28.png"
+
 
 
 img_ara_rgb = iio.imread(path_img_ara_rgb)
