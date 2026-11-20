@@ -248,7 +248,7 @@ plt.contour(lum_mask_warped_new, colors="blue", linewidths=1, alpha=0.5)
 
 CONCLUSIONS
 
-- all three cases work (my own test image, rgb/lum based on original matrix, rgb/lum on new matrix from calib images
+- all three cases work (my own test image, rgb/lum based on original matrix, rgb/lum on new matrix from calib images)
 - new matrix shows improvement, due to better point extraction: all 44 dots (least-squares fit)
   with sub-pixel centres, instead of 4 integer-rounded corner dots
 - a checkerboard pattern would in theory be better (circle centres are slightly biased under
