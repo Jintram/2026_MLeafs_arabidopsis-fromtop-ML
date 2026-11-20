@@ -246,6 +246,8 @@ plt.contour(lum_mask_warped_new, colors="blue", linewidths=1, alpha=0.5)
 # %% Conclusion
 """
 
+CONCLUSIONS
+
 - all three cases work (my own test image, rgb/lum based on original matrix, rgb/lum on new matrix from calib images
 - new matrix shows improvement, due better point extraction
 - checker board pattern could be better
