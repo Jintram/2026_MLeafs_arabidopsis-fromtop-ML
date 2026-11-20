@@ -61,7 +61,7 @@ plt.imshow(segmask==2)
 img_plant = imageio.imread(path_plantimg)
 plt.imshow(img_plant)
 
-# apply strong gamme transform
+# apply strong gamma transform
 img_plant_bright = (np.power(img_plant/255, .5)*255).astype(int)
 plt.imshow(img_plant_bright)
 

@@ -63,7 +63,8 @@ _, _ = ptt.plot_learning_rate(list_lr,
 custom_colormap = {
     0: 'transparent',
     1: '#E9BF94',
-    2: 'darkgreen',
+    # 2: 'darkgreen',
+    2: 'white', # for additional visibility in this dataset
     3: 'red'
 }
 
@@ -89,15 +90,8 @@ config2 = o2.Phase2Config(
     model_checkpoint_to_load = '/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/TRAINING_2layers/models/modelUNet20260524_2309__trained12h04m.pth'
 )
 
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-TO DO : BELOW WORKS, JUST NEED TO ADD PLOT LIKE "predictionoverlay2" 
-TO THE evaluate_on_full_testset_and_plot FUNCTION!!!
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 dataset_train, dataset_test, model_unet = o2.phase2_setup(config2)
 
 # now load the model parameters
 o2.evaluate_on_full_testset_and_plot(config2, model_unet, dataset_test)
+# %%
