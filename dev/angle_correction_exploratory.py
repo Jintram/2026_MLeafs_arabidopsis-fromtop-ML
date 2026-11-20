@@ -249,11 +249,29 @@ plt.contour(lum_mask_warped_new, colors="blue", linewidths=1, alpha=0.5)
 CONCLUSIONS
 
 - all three cases work (my own test image, rgb/lum based on original matrix, rgb/lum on new matrix from calib images
-- new matrix shows improvement, due better point extraction
-- checker board pattern could be better
+- new matrix shows improvement, due to better point extraction: all 44 dots (least-squares fit)
+  with sub-pixel centres, instead of 4 integer-rounded corner dots
+- a checkerboard pattern would in theory be better (circle centres are slightly biased under
+  perspective/distortion), but here that bias is negligible (~0.01-0.02 px)
 - more importantly, the field of view isn't entirely covered, leading to large displacement outside where the paper was
 
-(insert some additional claude stuff)
+Details:
+- residuals on the 44 calibration dots (rgb px):
+    affine            median 1.25, max 3.29
+    projective (new)  median 0.30, max 1.18   -> perspective matters, use projective
+    old tf_ara        median 1.69, max 3.20
+- old vs new matrix disagree by ~0-2 px where the sheet was (lum x 771-1345, y 732-1543),
+  but by up to ~10-17 px at the image edges -> both are extrapolating there
+- the extra "padding" in the RGB image (large y-offset) does NOT degrade the fit; translation is
+  part of the transform (pre-shifting points gives an identical mapping, diff ~1e-9 px)
+- RGB calib image needed preprocessing for cv2.findCirclesGrid: mask to the paper sheet
+  (tray holes are detected as dots otherwise), stretch contrast, and raise the blob detector maxArea
+
+Next steps:
+- calibrate with the sheet at multiple positions covering the whole field (at plant height),
+  pool all point pairs into one fit
+- with full coverage, check edge residuals for projective vs polynomial/thin-plate-spline
+  (systematic pattern -> lens distortion)
 
 
 """
