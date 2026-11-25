@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from skimage.segmentation import watershed
 from skimage.morphology import dilation, disk, remove_small_objects
-from skimage.measure import regionprops
+from skimage.measure import regionprops, label
 
 from matplotlib.colors import ListedColormap
 
@@ -47,6 +47,8 @@ CURRENT_SEGFILE = "07_DPI_C01 tray1 7dpi§001_TopRGB_2026-01-15T14-57-00.png_seg
 SEG_MASK_DIR = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/SEG/seg_ORIGINALS_NOT-annotated_2/segfiles/images/"
 PLANT_IMAGE_DIR = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS_NOT-annotated/images/"
 
+SEED_MASK = "/Users/m.wehrens/Documents/git_repos/_UVA/_Projects-bioDSC/2026_MLeafs_arabidopsis-fromtop-ML/plant_seed_mask_dilated.npz"
+
 current_file_plant = CURRENT_SEGFILE.replace("_seg.npz",".png")
 
 path_segmask  = SEG_MASK_DIR + CURRENT_SEGFILE
@@ -67,7 +69,7 @@ plt.imshow(img_plant_bright)
 
 
 # load seed mask
-mask_seeds = np.load("plant_seed_mask_dilated.npz")["mask_seeds_dilated"]
+mask_seeds = np.load(SEED_MASK)["mask_seeds_dilated"]
 plt.imshow(mask_seeds)
 
 # now apply watershedding based one seeds
@@ -82,18 +84,33 @@ plt.imshow(labelmask_shed, cmap=cmap_random(16))
 mask_shed_dilated = dilation(labelmask_shed>0, disk(10))
 plt.imshow(mask_shed_dilated)
 
+# relabel dilated mask
+mask_shed_dilated_relabeled = label(mask_shed_dilated)
+    # plt.imshow(mask_shed_dilated_relabeled)
+
+# assign labelmask_shed labels based on what's connected in dilated mask
+# ie assign regions that are close the same label
+labelmask_shed_relabeled = np.zeros_like(labelmask_shed)
+labelmask_shed_relabeled[labelmask_shed>0] = mask_shed_dilated_relabeled[labelmask_shed>0]
+    # plt.imshow(labelmask_shed_relabeled)
+
+# %%
+
 # now remove objects that are smaller than 600 px^2 
 # removes stuff with diameter of 7; ((7+10+10)/2)**2*math.pi 
 # = 572
-mask_cleaned = remove_small_objects(mask_shed_dilated, min_size=600)
+mask_tokeep = remove_small_objects(labelmask_shed_relabeled, min_size=600)>0
 labelmask_cleaned = np.zeros_like(labelmask_shed)
-labelmask_cleaned[mask_cleaned] = labelmask_shed[mask_cleaned]
+labelmask_cleaned[mask_tokeep] = labelmask_shed[mask_tokeep]
 
-plt.imshow(mask_cleaned)
-plt.imshow(labelmask_cleaned, cmap=cmap_random(16))
+plt.imshow(labelmask_cleaned)
+#plt.imshow(labelmask_cleaned, cmap=cmap_random(16))
 
 # get some stats
 plant_regionprops = regionprops(labelmask_cleaned)
+
+################################################################################
+# %% Plotting
 
 # now plot 
 OUTDIR = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS_NOT-annotated/processing/"

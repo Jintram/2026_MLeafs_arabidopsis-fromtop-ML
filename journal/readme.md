@@ -3,6 +3,11 @@
 
 ## Notes on what I did
 
+### 25-11-2026
+
+- [ ] Write the proof of principle script into a pipeline
+    - [ ] First, fix the last part, the plotting section, of `pipelineclean_phase4_postprocessing.py`, as it is misbehaving with label colors
+    - [ ] Continue making pipeline    
 
 ### 30-04-2026
 
