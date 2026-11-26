@@ -116,29 +116,33 @@ plant_regionprops = regionprops(labelmask_cleaned)
 OUTDIR = "/Users/m.wehrens/Data_UVA/2026_02_araplants_highthroughput/TRAINING/ORIGINALS_NOT-annotated/processing/"
 os.makedirs(OUTDIR, exist_ok=True)
 # mycmap = cmap_random_dark(50, .6)
-mycmap = cmap_random(1+np.max(labelmask_cleaned), min_brightness=.6)
+mycmap = cmap_random(np.max(labelmask_cleaned), min_brightness=.6)
 
 plt.rcParams.update({'font.size': 6, 'font.family': 'Arial'})
 fig, axs = plt.subplots(1,2, figsize=(16.8/2.54, 8/2.54))
 fig.suptitle(f"{CURRENT_SEGFILE}")
 axs[0].imshow(img_plant_bright)
-axs[1].imshow(labelmask_cleaned, cmap=mycmap)
-for lbl_idx in range(1,1+np.max(labelmask_cleaned)):
-    axs[0].contour(labelmask_cleaned==lbl_idx, colors='white', linewidths=.05)
-    # write plant label
+axs[1].imshow(labelmask_cleaned, cmap=mycmap, vmin=0, vmax=np.max(labelmask_cleaned))
+# for lbl_idx in range(1,1+np.max(labelmask_cleaned)):
+for rp in plant_regionprops:
     
-    y, x = plant_regionprops[lbl_idx-1].centroid
-    ytop, xleft = plant_regionprops[lbl_idx-1].bbox[:2]
-    #axs[0].plot(x,y,'xk',markersize=1)
-    #axs[0].plot(xleft,ytop,'s',markersize=5, color=mycmap(lbl_idx), markeredgewidth=0)
-    axs[0].plot(xleft,ytop,'s',markersize=5, color='black', markeredgewidth=0)
-    # text label next to the point
-    #axs[0].text(xleft, ytop, grid_mapping(lbl_idx), color='white', fontsize=4, ha='center', va='center')
-    axs[0].text(xleft, ytop, grid_mapping(lbl_idx), color=mycmap(lbl_idx), fontsize=4, ha='center', va='center')
+    lbl = rp.label 
 
-    # also add to 2nd panel    
-    axs[1].plot(xleft,ytop,'s',markersize=5, color='black', markeredgewidth=0, alpha=.5)
-    axs[1].text(xleft, ytop, grid_mapping(lbl_idx), color=mycmap(lbl_idx), fontsize=4, ha='center', va='center')
+    # print contours separately in case of touching
+    axs[0].contour(labelmask_cleaned==lbl, colors='white', linewidths=.05)
+    
+    # write plant label on 1st panel
+    ytop, xleft = rp.bbox[:2]
+    axs[0].text(xleft, ytop, grid_mapping(lbl), color=mycmap(lbl), fontsize=4,
+            ha='center', va='center',
+            bbox=dict(facecolor='black', edgecolor='none', boxstyle='square,pad=0.2', alpha=.5))
+
+    # and plant label to 2nd panel  
+    axs[1].text(xleft, ytop, grid_mapping(lbl), color=mycmap(lbl), fontsize=4,
+            ha='center', va='center',
+            bbox=dict(facecolor='black', edgecolor='none', boxstyle='square,pad=0.2', alpha=.5))
+    #axs[1].plot(xleft,ytop,'s',markersize=5, color='black', markeredgewidth=0, alpha=.5)
+    #axs[1].text(xleft, ytop, grid_mapping(lbl_idx), color=mycmap(lbl_idx), fontsize=4, ha='center', va='center')
 
 plt.tight_layout()
 # save
