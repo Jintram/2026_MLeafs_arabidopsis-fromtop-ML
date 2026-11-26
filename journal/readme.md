@@ -9,9 +9,13 @@
 
 ### 25-11-2026
 
-- [ ] Write the proof of principle script into a pipeline
-    - [ ] First, fix the last part, the plotting section, of `pipelineclean_phase4_postprocessing.py`, as it is misbehaving with label colors
-    - [ ] Continue making pipeline    
+- [X] Write the proof of principle script into a pipeline
+    - [X] First, fix the last part, the plotting section, of `pipelineclean_phase4_postprocessing.py`, as it is misbehaving with label colors
+    - [X] Continue making pipeline using Claude
+    - [ ] Check Claude-generated code
+        - >>>>>> I WAS WORKING HERE <<<<<<<<
+        - Checked a few fns in `arafromtop/postprocessing.py`, but check that code (start with config)
+        - >>>>>> END I WAS WORKING HERE <<<<<<<<
 - [ ] Current PNGs are 8-bit, clipped, possibly gamma-encoded, and have no exposure metadata. Perhaps there exists 16 bit raw data? Are there issues with using those? Also it would be good to have access to metadata.
 - [ ] Check whether training of the U-net 
 

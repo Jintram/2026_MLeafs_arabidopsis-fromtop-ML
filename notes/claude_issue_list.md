@@ -16,6 +16,7 @@
 - [`luminescence.py`] At 7 DPI most hydathode spots are single ES pixels, so `min_spot_size=1`; singleton noise can't be removed by size without also losing them.
 - [`luminescence.py`] Many spots lie 40–270 RGB px from any plant (7 DPI tray1: 45 of 55) → off-plant signal or noise, counted in `n_spots_unassigned`; check what they are.
 - [`luminescence.py`] `spot_median_dimmest` is usually 2 (= cutoff 3 + 1 − mode 2) → it mostly reflects the detection limit.
+- [`plotting.py`] Matplotlib's default `image.composite_image=True` shifted the full-size RGB image relative to the contours in the overview PDF when an overlay image was in the same axes. Fixed by setting it to False in `FIG_RC`.
 - [`plotting.py`] Overview PDFs are ~19 MB each (3 full-resolution images) → consider downsampling the display images.
 - [Results] Several 7 DPI trays have only 8–9 plants (C01 tray5–8). Many trays have exactly 12 (maybe by design). Check whether small 7 DPI seedlings are removed by `min_size_cluster=600` / `min_size_wholeplant=400`.
 - [`*_seg.npz`] `prepr_info` is an object array → loading all keys fails without `allow_pickle`; load only `img_pred_lbls`.

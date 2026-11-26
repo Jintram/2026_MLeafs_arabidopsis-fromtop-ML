@@ -91,6 +91,9 @@ class Phase4Config:
 
 def parse_sample_name(filename):
     """Extract dpi, batch, tray, replicate and timestamp from an image filename (NaN if absent)."""
+    
+    # TO DO: check this function
+    
     patterns = {"dpi": r"(\d+)\s*_?dpi",
                 "batch": r"(?:^|[_\s])(C\d+)(?=[_\s])",
                 "tray": r"tray\s*(\d+)",
@@ -107,17 +110,30 @@ def parse_sample_name(filename):
 
 def find_lum_file(rgb_filename, dir_lum):
     """Return the path of the ES image matching an RGB image (TopRGB -> TopES), or None."""
+
+    # Search/replace to get corresponding ES file
     lum_name = os.path.basename(rgb_filename).replace("TopRGB", "TopES")
+
+    # If direct corresponding file exists, use it
     direct = os.path.join(dir_lum, lum_name)
     if os.path.exists(direct):
         return direct
+    
+    # otherwise look for it    
     hits = glob.glob(os.path.join(glob.escape(dir_lum), "**", glob.escape(lum_name)), recursive=True)
+
+    # if >1 hits, throw warning
+    if len(hits) > 1:
+        print(f"Warning: multiple ES files found (using 1st hit) for {rgb_filename}: {hits}")
+    
     return hits[0] if hits else None
 
 
 def get_transform(config):
     """Load the ES->RGB transform; fit and save it from the calibration images if missing."""
+    
     path_tf = config.resolve(config.transform_path)
+    
     if os.path.exists(path_tf):
         return calibration.load_transform(path_tf)
 

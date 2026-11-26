@@ -19,7 +19,10 @@ COLOR_PLANT_CONTOUR = "white"
 COLOR_EXPANDED_ROI = "deepskyblue"   # expanded ROI used for luminescence assignment
 COLOR_SPOTS = "red"
 COLOR_YELLOW = (1.0, 0.85, 0.0)
-FIG_RC = {"font.size": 6, "font.family": "Arial"}
+# image.composite_image=False: by default matplotlib merges all images in one axes
+# into a single image when saving a PDF; for the full-size RGB + overlay this
+# shifted the image relative to the contours
+FIG_RC = {"font.size": 6, "font.family": "Arial", "image.composite_image": False}
 TEXT_BBOX = dict(facecolor="black", edgecolor="none", boxstyle="square,pad=0.2", alpha=.5)
 
 
