@@ -17,7 +17,7 @@ from skimage.morphology import dilation, disk
 
 # %%
 
-mask_seeds = np.load("plant_seed_mask.npz")["lbls"]
+mask_seeds = np.load("legacy/plant_seed_mask.npz")["lbls"]
 plt.imshow(mask_seeds)
 
 # %%
@@ -30,3 +30,7 @@ plt.imshow(mask_seeds_dilated)
 
 # now save
 np.savez("plant_seed_mask_dilated.npz", mask_seeds_dilated=mask_seeds_dilated)
+
+# %% Save to png (8-bit grey, lossless, editable in e.g. Fiji)
+
+imageio.imwrite("calibration_data/seedmask_positions.png", mask_seeds_dilated.astype(np.uint8))

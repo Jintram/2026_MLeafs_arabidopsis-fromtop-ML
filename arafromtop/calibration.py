@@ -38,7 +38,8 @@ def prep_calib_image(img):
     lo, hi = np.percentile(g[paper], [1, 99])
     g = np.clip((g - lo) / (hi - lo), 0, 1)
     g[~paper] = 1
-    return (g * 255).astype(np.uint8)
+    img_prepped = (g * 255).astype(np.uint8)
+    return img_prepped
 
 
 def find_grid(img, pattern=(4, 11)):
@@ -59,11 +60,12 @@ def find_grid(img, pattern=(4, 11)):
                                       blobDetector=blob_detector)
     if not ok:
         raise RuntimeError("Calibration dot grid not found.")
-    return centers.reshape(-1, 2)
+    pts = centers.reshape(-1, 2)
+    return pts
 
 
 def fit_lum_to_rgb(img_lum, img_rgb, model="projective"):
-    """Fit the ES->RGB transform on the calibration images; return (tf, residual summary)."""
+    """Fit the ES->RGB transform on the calibration images; return (matrix_lum_to_rgb, summary)."""
 
     pts_lum = find_grid(img_lum)
     pts_rgb = find_grid(img_rgb)
@@ -76,13 +78,13 @@ def fit_lum_to_rgb(img_lum, img_rgb, model="projective"):
         residuals[current_model] = {"median_px": float(np.median(resid)),
                                     "max_px": float(resid.max())}
 
-    tf = sk.transform.estimate_transform(model, pts_lum, pts_rgb)
+    matrix_lum_to_rgb = sk.transform.estimate_transform(model, pts_lum, pts_rgb)
     summary = {"model": model, "n_points": int(len(pts_lum)), "residuals_rgb_px": residuals,
                "pts_lum": pts_lum.tolist(), "pts_rgb": pts_rgb.tolist()}
-    return tf, summary
+    return matrix_lum_to_rgb, summary
 
 
-def plot_calibration_check(img_lum, img_rgb, tf, summary, path_pdf):
+def plot_calibration_check(img_lum, img_rgb, matrix_lum_to_rgb, summary, path_pdf):
     """Save an overlay of the warped ES on RGB, plus a residual quiver plot."""
 
     pts_lum = np.array(summary["pts_lum"])
@@ -91,9 +93,9 @@ def plot_calibration_check(img_lum, img_rgb, tf, summary, path_pdf):
     # Overlay: RGB in magenta, warped ES in green
     rgb_gray = sk.exposure.rescale_intensity(sk.color.rgb2gray(img_rgb[:, :, :3]))
     lum_warped = sk.exposure.rescale_intensity(
-        sk.transform.warp(sk.color.rgb2gray(img_lum[:, :, :3]), tf.inverse,
+        sk.transform.warp(sk.color.rgb2gray(img_lum[:, :, :3]), matrix_lum_to_rgb.inverse,
                           output_shape=rgb_gray.shape))
-    resid_vec = tf(pts_lum) - pts_rgb
+    resid_vec = matrix_lum_to_rgb(pts_lum) - pts_rgb
 
     # Two panels: overlay and residuals (exaggerated 100x)
     fig, axs = plt.subplots(1, 2, figsize=(12, 8))
@@ -112,37 +114,43 @@ def plot_calibration_check(img_lum, img_rgb, tf, summary, path_pdf):
 # %% Saving and loading the transform
 
 
-def save_transform(tf, summary, path_npy):
+def save_transform(matrix_lum_to_rgb, summary, path_npy):
     """Save the 3x3 matrix as .npy, and the residual summary as .json next to it."""
-    np.save(path_npy, tf.params / tf.params[2, 2])
+    np.save(path_npy, matrix_lum_to_rgb.params / matrix_lum_to_rgb.params[2, 2])
     with open(str(path_npy).replace(".npy", ".json"), "w") as f:
         json.dump(summary, f, indent=2)
 
 
 def load_transform(path_npy):
     """Load the ES->RGB transform saved by `save_transform`."""
-    return sk.transform.ProjectiveTransform(matrix=np.load(path_npy))
+    matrix_lum_to_rgb = sk.transform.ProjectiveTransform(matrix=np.load(path_npy))
+    return matrix_lum_to_rgb
 
 ################################################################################
 # %% Warping label masks between frames
 
 
-def warp_labels_to_rgb(lbl_es, tf, rgb_shape):
+def warp_labels_to_rgb(lbl_es, matrix_lum_to_rgb, rgb_shape):
     """Warp an ES-frame label image into the RGB frame (nearest neighbour)."""
-    warped = sk.transform.warp(lbl_es.astype(float), tf.inverse, output_shape=rgb_shape,
-                               order=0, preserve_range=True, cval=0)
-    return np.rint(warped).astype(lbl_es.dtype)
+    warped = sk.transform.warp(lbl_es.astype(float), matrix_lum_to_rgb.inverse,
+                               output_shape=rgb_shape, order=0, preserve_range=True, cval=0)
+    lbl_rgb = np.rint(warped).astype(lbl_es.dtype)
+    return lbl_rgb
 
 
-def warp_labels_to_es(lbl_rgb, tf, es_shape):
+def warp_labels_to_es(lbl_rgb, matrix_lum_to_rgb, es_shape):
     """Warp an RGB-frame label image into the ES frame (nearest neighbour)."""
-    # (warp needs the output->input map; output = ES, input = RGB, so that's tf itself)
-    warped = sk.transform.warp(lbl_rgb.astype(float), tf, output_shape=es_shape,
-                               order=0, preserve_range=True, cval=0)
-    return np.rint(warped).astype(lbl_rgb.dtype)
+    # (warp needs the output->input map; output = ES, input = RGB, so that's
+    # matrix_lum_to_rgb itself)
+    warped = sk.transform.warp(lbl_rgb.astype(float), matrix_lum_to_rgb,
+                               output_shape=es_shape, order=0, preserve_range=True, cval=0)
+    lbl_es = np.rint(warped).astype(lbl_rgb.dtype)
+    return lbl_es
 
 
-def warp_intensity_to_rgb(img_es, tf, rgb_shape):
+def warp_intensity_to_rgb(img_es, matrix_lum_to_rgb, rgb_shape):
     """Warp an ES intensity image into the RGB frame (bilinear); for display only."""
-    return sk.transform.warp(img_es.astype(float), tf.inverse, output_shape=rgb_shape,
-                             order=1, preserve_range=True, cval=0)
+    img_rgbframe = sk.transform.warp(img_es.astype(float), matrix_lum_to_rgb.inverse,
+                                     output_shape=rgb_shape, order=1, preserve_range=True,
+                                     cval=0)
+    return img_rgbframe

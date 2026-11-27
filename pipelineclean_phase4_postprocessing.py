@@ -2,6 +2,7 @@
 # %% ###########################################################################
 
 # Phase 4: postprocessing of the segmentations.
+# Unlike phases 1–3 (cheeky_cells), this uses the project-specific package arafromtop/.
 # Per plant (tray position A1..D4): area, green/yellow tissue, luminescence spots.
 # (The original exploratory version is `pipelineclean_phase4_postprocessing_exploratory.py`.)
 
@@ -18,6 +19,7 @@ import dataclasses
 
 import numpy as np
 
+import arafromtop.plant_rois as ara_plant
 import arafromtop.postprocessing as p4
     # import importlib; importlib.reload(p4)
 
@@ -37,18 +39,18 @@ config4 = p4.Phase4Config(
 # %% ###########################################################################
 # Calibration (run once; creates calibration_data/tf_lum_to_rgb.npy if missing)
 
-tf = p4.get_transform(config4)
-print(np.round(tf.params, 5))
+matrix_lum_to_rgb = p4.get_transform(config4)
+print(np.round(matrix_lum_to_rgb.params, 5))
 
 # %% ###########################################################################
 # Test on one file, including the per-plant plots
 
-seeds = np.load(config4.resolve(config4.seed_mask_path))["mask_seeds_dilated"]
+seedmask_positions = ara_plant.load_seedmask_positions(config4.resolve(config4.seed_mask_path))
 config4_test = dataclasses.replace(config4, save_plant_pdfs=True)
 
 plants_df, image_row = p4.process_single_file(
     "images/07_DPI_C01 tray1 7dpi§001_TopRGB_2026-01-15T14-57-00.png_seg.npz",
-    config4_test, seeds, tf)
+    config4_test, seedmask_positions, matrix_lum_to_rgb)
 print(image_row)
 plants_df
 
@@ -96,8 +98,11 @@ config4_dbg = dataclasses.replace(
 # reload the submodules first (reloading p4 alone keeps the old cached submodules),
 # and p4 last, so it picks up the reloaded ones
 import importlib
-from arafromtop import calibration, plant_rois, color_classification, luminescence, plotting
-for module in [calibration, plant_rois, color_classification, luminescence, plotting, p4]:
+import arafromtop.calibration as ara_cal
+import arafromtop.color_classification as ara_col
+import arafromtop.luminescence as ara_lum
+import arafromtop.plotting as ara_plot
+for module in [ara_cal, ara_plant, ara_col, ara_lum, ara_plot, p4]:
     importlib.reload(module)
 
 plants_df_dbg, images_df_dbg = p4.process_directory(config4_dbg)

@@ -13,9 +13,12 @@
     - [X] First, fix the last part, the plotting section, of `pipelineclean_phase4_postprocessing.py`, as it is misbehaving with label colors
     - [X] Continue making pipeline using Claude
     - [ ] Check Claude-generated code
-        - >>>>>> I WAS WORKING HERE <<<<<<<<
-        - Checked a few fns in `arafromtop/postprocessing.py`, but check that code (start with config)
-        - >>>>>> END I WAS WORKING HERE <<<<<<<<
+        
+        CURRENTLY I'M GOING THROUGH THE CODE, 
+        CONTINUE AT `arafromtop/postprocessing.py`
+        SEE NOTE THERE `# XXXXXX CONTINUE GOING THROUGH CODE HERE <<<<<<<<<<<<<<<`
+        (`arafromtop/plant_rois.py` WAS ALREADY COMPLETELY DONE)
+        
 - [ ] Current PNGs are 8-bit, clipped, possibly gamma-encoded, and have no exposure metadata. Perhaps there exists 16 bit raw data? Are there issues with using those? Also it would be good to have access to metadata.
 - [ ] Check whether training of the U-net 
 

@@ -1,7 +1,7 @@
 
 """Phase-4 postprocessing: plant ROIs, colour split and luminescence per plant.
 
-Call `process_directory(config)` from a runner script; see
+Call `process_directory(config4)` from a runner script; see
 `pipelineclean_phase4_postprocessing.py`.
 """
 
@@ -16,15 +16,19 @@ import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+
 import imageio.v3 as iio
 import numpy as np
 import pandas as pd
 
-from skimage.measure import regionprops
+import skimage as sk
 
-from arafromtop import calibration, luminescence, plotting
-from arafromtop.color_classification import classify_rgb
-from arafromtop.plant_rois import grid_mapping, segmentation_to_plant_rois
+import arafromtop.calibration as ara_cal
+import arafromtop.color_classification as ara_col
+import arafromtop.luminescence as ara_lum
+import arafromtop.plant_rois as ara_plant
+import arafromtop.plotting as ara_plot
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 N_POSITIONS, N_COLS = 16, 4
@@ -43,20 +47,19 @@ class Phase4Config:
     glob_pattern: str = "**/*_seg.npz"
 
     # Files in the repo (relative paths are resolved against the repo root)
-    seed_mask_path: str = "plant_seed_mask_dilated.npz"
+    seed_mask_path: str = "calibration_data/seedmask_positions.png"
     transform_path: str = "calibration_data/tf_lum_to_rgb.npy"
     calib_lum_path: str = "calibration_data/Calibration16tray§004_TopESLive_2023-10-02T12-44-33.png"
     calib_rgb_path: str = "calibration_data/Calibration16tray§004_TopRGB_2023-10-02T12-44-33.png"
 
-    # Plant ROIs (min_size_cluster is the undilated plant area of a cluster of
-    # fragments that lie within dilation_radius of each other)
-    label_class: int = 2
-    dilation_radius: int = 10
-    min_size_cluster: int = 600
-    min_size_wholeplant: int = 400
+    # Plant ROIs 
+    plant_classlabel: int = 2 # segmentation label that is plant
+    dilation_radius: int = 10 # radius used to connect plants
+    min_size_cluster: int = 600 # XXX
+    min_size_wholeplant: int = 400 # XXX
 
     # Colour classification (swap the function to change the method)
-    color_classifier: callable = classify_rgb
+    color_classifier: callable = ara_col.classify_rgb
     color_params: dict = field(default_factory=dict)
 
     # Luminescence: cutoff = mode + max(n_sigma*sigma_below, n_sigma*min_sigma_frac*mode);
@@ -78,12 +81,14 @@ class Phase4Config:
 
     def resolve(self, path):
         """Resolve a path relative to the repo root (absolute paths are kept)."""
-        return str(path if os.path.isabs(path) else REPO_ROOT / path)
+        path_resolved = str(path if os.path.isabs(path) else REPO_ROOT / path)
+        return path_resolved
 
     def lum_params(self):
-        return {k: getattr(self, k) for k in ["n_sigma", "min_sigma_frac", "min_spot_size",
-                                              "max_spot_size", "exclude_oversized",
-                                              "assign_radius"]}
+        keys = ["n_sigma", "min_sigma_frac", "min_spot_size", "max_spot_size",
+                "exclude_oversized", "assign_radius"]
+        params = {k: getattr(self, k) for k in keys}
+        return params
 
 ################################################################################
 # %% Files and names
@@ -129,23 +134,27 @@ def find_lum_file(rgb_filename, dir_lum):
     return hits[0] if hits else None
 
 
-def get_transform(config):
+def get_transform(config4):
     """Load the ES->RGB transform; fit and save it from the calibration images if missing."""
-    
-    path_tf = config.resolve(config.transform_path)
-    
-    if os.path.exists(path_tf):
-        return calibration.load_transform(path_tf)
 
-    # Fit, save, and save a visual check next to it
-    img_lum = iio.imread(config.resolve(config.calib_lum_path))
-    img_rgb = iio.imread(config.resolve(config.calib_rgb_path))
-    tf, summary = calibration.fit_lum_to_rgb(img_lum, img_rgb)
-    print(f"Calibration residuals (RGB px): {summary['residuals_rgb_px']}")
-    calibration.save_transform(tf, summary, path_tf)
-    calibration.plot_calibration_check(img_lum, img_rgb, tf, summary,
-                                       path_tf.replace(".npy", "_check.pdf"))
-    return calibration.load_transform(path_tf)
+    # The result (matrix_lum_to_rgb elsewhere) is a skimage ProjectiveTransform: the
+    # 3x3 matrix (.params) plus methods such as .inverse
+    
+    path_matrix_tf = config4.resolve(config4.transform_path)
+    
+    # Fit, save, and save a visual check next to it (only if not saved before)
+    if not os.path.exists(path_matrix_tf):
+        img_lum = iio.imread(config4.resolve(config4.calib_lum_path))
+        img_rgb = iio.imread(config4.resolve(config4.calib_rgb_path))
+        matrix_lum_to_rgb, summary = ara_cal.fit_lum_to_rgb(img_lum, img_rgb)
+        print(f"Calibration residuals (RGB px): {summary['residuals_rgb_px']}")
+        ara_cal.save_transform(matrix_lum_to_rgb, summary, path_matrix_tf)
+        ara_cal.plot_calibration_check(img_lum, img_rgb, matrix_lum_to_rgb, summary,
+                                       path_matrix_tf.replace(".npy", "_check.pdf"))
+
+    # Load from file (also after fitting, so both cases give the same object)
+    matrix_lum_to_rgb = ara_cal.load_transform(path_matrix_tf)
+    return matrix_lum_to_rgb
 
 ################################################################################
 # %% Per-plant table
@@ -154,7 +163,7 @@ def get_transform(config):
 def plant_table(image_name, labelmask, color_res, lum_res):
     """One row per tray position (always 16), with area, colour and luminescence stats."""
     meta = parse_sample_name(image_name)
-    props = {p.label: p for p in regionprops(labelmask)}
+    props = {p.label: p for p in sk.measure.regionprops(labelmask)}
     n_lbl = N_POSITIONS + 1
     green_px = np.bincount(labelmask[color_res["green_mask"]], minlength=n_lbl)
     yellow_px = np.bincount(labelmask[color_res["yellow_mask"]], minlength=n_lbl)
@@ -164,7 +173,7 @@ def plant_table(image_name, labelmask, color_res, lum_res):
         # Identification and plant/colour areas (0 for empty positions)
         prop = props.get(lbl)
         area = int(prop.area) if prop else 0
-        row = {"image": image_name, **meta, "position": grid_mapping(lbl, N_COLS),
+        row = {"image": image_name, **meta, "position": ara_plant.grid_mapping(lbl, N_COLS),
                "row": (lbl - 1) // N_COLS, "col": (lbl - 1) % N_COLS, "label": lbl,
                "plant_present": prop is not None, "plant_area_px": area,
                "green_area_px": int(green_px[lbl]), "yellow_area_px": int(yellow_px[lbl]),
@@ -175,45 +184,58 @@ def plant_table(image_name, labelmask, color_res, lum_res):
 
         # Luminescence stats (NaN when the plant is absent or there is no ES image)
         if lum_res is not None and prop is not None:
-            row.update(luminescence.plant_lum_stats(
+            row.update(ara_lum.plant_lum_stats(
                 lum_res["lum"], lum_res["background"], lum_res["spot_lbl_es"],
                 lum_res["spots"], lum_res["spot_to_plant"], lum_res["plant_lbl_es"],
                 lbl, area))
         rows.append(row)
-    return pd.DataFrame(rows)
+
+    plants_df = pd.DataFrame(rows)
+    return plants_df
 
 ################################################################################
 # %% Single file
 
 
-def process_single_file(segfile, config, seeds, tf):
+def process_single_file(relpath_segfile, config4, seedmask_positions, matrix_lum_to_rgb):
     """Process one segmentation file; return (plants_df, image_row)."""
 
-    # Paths: segfile is relative to dir_seg, e.g. "images/<name>.png_seg.npz"
-    rel_rgb = segfile.replace("_seg.npz", ".png")
+    # Get relevant relative and absolute paths
+    rel_rgb = relpath_segfile.replace("_seg.npz", ".png")
     image_name = os.path.basename(rel_rgb)
-    path_rgb = os.path.join(config.dir_rgb, rel_rgb)
-    path_lum = find_lum_file(image_name, config.dir_lum)
-    out_base = os.path.join(config.dir_output, re.sub(r"\.png$", "", rel_rgb))
+    path_rgb = os.path.join(config4.dir_rgb, rel_rgb)
+    path_lum = find_lum_file(image_name, config4.dir_lum)
+    out_base = os.path.join(config4.dir_output, re.sub(r"\.png$", "", rel_rgb))
+
+    # Make output dir
     os.makedirs(os.path.dirname(out_base), exist_ok=True)
 
-    # Load segmentation (only the labels key; prepr_info is an object array) and image
-    segmask = np.load(os.path.join(config.dir_seg, segfile))["img_pred_lbls"]
+    # Load segmentation mask and rgb image
+    segmask = np.load(os.path.join(config4.dir_seg, relpath_segfile))["img_pred_lbls"]
     img_rgb = iio.imread(path_rgb)[..., :3]
-    img_bright = (np.power(img_rgb / 255.0, config.gamma) * 255).astype(np.uint8)
+    img_bright = (np.power(img_rgb / 255.0, config4.gamma) * 255).astype(np.uint8)
+    # plt.imshow(img_bright)
 
     # Plant ROIs and colour classification
-    labelmask = segmentation_to_plant_rois(segmask, seeds, config.label_class,
-                                           config.dilation_radius, config.min_size_cluster,
-                                           config.min_size_wholeplant)
-    color_res = config.color_classifier(img_rgb, labelmask > 0, config.color_params)
+    labelmask = ara_plant.segmentation_to_plant_rois(
+        segmask, seedmask_positions, 
+        plant_classlabel = config4.plant_classlabel, 
+        dilation_radius=config4.dilation_radius,
+        min_size_cluster=config4.min_size_cluster, 
+        min_size_wholeplant=config4.min_size_wholeplant)
+        # plt.imshow(labelmask)
+        
+    # XXXXXX CONTINUE GOING THROUGH CODE HERE <<<<<<<<<<<<<<<
+        
+    color_res = config4.color_classifier(img_rgb, labelmask > 0, config4.color_params)
 
     # Luminescence (if an ES image is available)
     lum_res, lum_disp = None, None
     if path_lum is not None:
-        lum_res = luminescence.analyse_luminescence(path_lum, labelmask, tf, config.lum_params())
+        lum_res = ara_lum.analyse_luminescence(path_lum, labelmask, matrix_lum_to_rgb,
+                                               config4.lum_params())
         lum_sub = np.clip(lum_res["lum"] - lum_res["background"], 0, None)
-        lum_disp = calibration.warp_intensity_to_rgb(lum_sub, tf, labelmask.shape)
+        lum_disp = ara_cal.warp_intensity_to_rgb(lum_sub, matrix_lum_to_rgb, labelmask.shape)
 
     # Tables
     plants_df = plant_table(image_name, labelmask, color_res, lum_res)
@@ -224,24 +246,24 @@ def process_single_file(segfile, config, seeds, tf):
                  "status": "ok", "error": ""}
 
     # Save masks
-    if config.save_npz:
+    if config4.save_npz:
         extra = {} if lum_res is None else {"labelmask_expanded": lum_res["labelmask_expanded"],
                                             "spot_labels_rgb": lum_res["spot_lbl_rgb"]}
         np.savez_compressed(out_base + "_proc.npz", labelmask_cleaned=labelmask,
                             yellow_mask=color_res["yellow_mask"], **extra)
 
     # Plots
-    if config.save_overview_pdf:
-        plotting.plot_image_overview(image_name, img_bright, labelmask, color_res["yellow_mask"],
-                                     lum_res, lum_disp, out_base + "_overview.pdf", config.dpi)
-    if config.save_plant_pdfs:
+    if config4.save_overview_pdf:
+        ara_plot.plot_image_overview(image_name, img_bright, labelmask, color_res["yellow_mask"],
+                                     lum_res, lum_disp, out_base + "_overview.pdf", config4.dpi)
+    if config4.save_plant_pdfs:
         dir_plants = os.path.join(os.path.dirname(out_base), "per_plant", os.path.basename(out_base))
         os.makedirs(dir_plants, exist_ok=True)
         for _, plant_row in plants_df[plants_df["plant_present"]].iterrows():
-            plotting.plot_plant_detail(image_name, plant_row["label"], img_bright, img_rgb,
+            ara_plot.plot_plant_detail(image_name, plant_row["label"], img_bright, img_rgb,
                                        labelmask, color_res, lum_res, lum_disp, plant_row,
                                        os.path.join(dir_plants, f"{plant_row['position']}.pdf"),
-                                       dpi=config.dpi_plant)
+                                       dpi=config4.dpi_plant)
 
     return plants_df, image_row
 
@@ -249,46 +271,82 @@ def process_single_file(segfile, config, seeds, tf):
 # %% Batch
 
 
-def list_segfiles(config):
+def get_list_segfiles(config4):
     """All segmentation files under dir_seg, relative to it, sorted."""
-    return sorted(glob.glob(config.glob_pattern, root_dir=config.dir_seg, recursive=True))
+
+    # get all sample seg files
+    list_segfiles = sorted(glob.glob(config4.glob_pattern, root_dir=config4.dir_seg, recursive=True))
+    
+    return list_segfiles
 
 
-def save_config(config, path_json):
+def save_config(config4, path_json):
     """Save the config used (function names instead of functions) as JSON."""
-    cfg = asdict(config)
-    cfg["color_classifier"] = config.color_classifier.__name__
+
+    # convert to dict
+    cfg_dict = asdict(config4)
+
+    # replace function by its name
+    cfg_dict["color_classifier"] = config4.color_classifier.__name__
+
+    # save it as JSON
     with open(path_json, "w") as f:
-        json.dump(cfg, f, indent=2, default=str)
+        json.dump(cfg_dict, f, indent=2, default=str)
 
 
-def process_directory(config, max_files=None):
+# %%
+
+def process_directory(config4, max_files=None):
     """Process all segmentation files; write results_plants.csv and results_images.csv.
 
     Errors in a file are recorded in results_images.csv (status/error) and the
     batch continues. Returns (plants_df, images_df).
     """
-    os.makedirs(config.dir_output, exist_ok=True)
-    seeds = np.load(config.resolve(config.seed_mask_path))["mask_seeds_dilated"]
-    tf = get_transform(config)
-    segfiles = list_segfiles(config)[:max_files]
+
+    # Admin: make dirs and load seed/image transformation file
+    os.makedirs(config4.dir_output, exist_ok=True)
+    seedmask_positions = ara_plant.load_seedmask_positions(
+        config4.resolve(config4.seed_mask_path))
+    matrix_lum_to_rgb = get_transform(config4)
+
+    # Get list of samples that were segmented
+    list_segfiles = get_list_segfiles(config4)[:max_files]
 
     # Process file by file
     all_plants, all_images = [], []
-    for idx, segfile in enumerate(segfiles):
-        print(f"Processing file {idx + 1}/{len(segfiles)}: {segfile}")
-        try:
-            plants_df, image_row = process_single_file(segfile, config, seeds, tf)
-            all_plants.append(plants_df)
-        except Exception as e:
-            traceback.print_exc()
-            image_row = {"image": os.path.basename(segfile), "status": "error", "error": repr(e)}
-        all_images.append(image_row)
+    for idx, relpath_segfile in enumerate(list_segfiles):
+        # idx, relpath_segfile = 0, list_segfiles[0]  # debug
+        
+        print(f"Processing file {idx + 1}/{len(list_segfiles)}: {relpath_segfile}")
 
-    # Combined tables and the config used
+        # process sample, try/except to keep loop going in case failure
+        try:
+                        
+            # process sample, collect per-plant and per-image data
+            plants_df, image_row = process_single_file(relpath_segfile, config4, seedmask_positions,
+                                                       matrix_lum_to_rgb)
+
+            # track results
+            all_plants.append(plants_df)            
+            all_images.append(image_row)
+            
+        except Exception as e:
+            
+            # put full traceback on screen
+            traceback.print_exc()
+            
+            # set the result to error summary
+            image_row = {"image": os.path.basename(relpath_segfile), "status": "error",
+                         "error": repr(e)}
+            all_images.append(image_row)        
+
+    # Create and save combined tables 
     plants_df = pd.concat(all_plants, ignore_index=True) if all_plants else pd.DataFrame()
     images_df = pd.DataFrame(all_images)
-    plants_df.to_csv(os.path.join(config.dir_output, "results_plants.csv"), index=False)
-    images_df.to_csv(os.path.join(config.dir_output, "results_images.csv"), index=False)
-    save_config(config, os.path.join(config.dir_output, "config_used.json"))
+    plants_df.to_csv(os.path.join(config4.dir_output, "results_plants.csv"), index=False)
+    images_df.to_csv(os.path.join(config4.dir_output, "results_images.csv"), index=False)
+    
+    # Save the config used
+    save_config(config4, os.path.join(config4.dir_output, "config_used.json"))
+    
     return plants_df, images_df

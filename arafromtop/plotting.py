@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from matplotlib.colors import ListedColormap
-from skimage.measure import regionprops
+import skimage as sk
 
-from arafromtop.plant_rois import grid_mapping
+import arafromtop.plant_rois as ara_plant
 
 ################################################################################
 # %% Style
@@ -31,7 +31,8 @@ def cmap_positions(n_positions=16, min_brightness=0.6, seed=0):
     rng = np.random.default_rng(seed)
     colors = np.zeros((n_positions + 1, 3))
     colors[1:] = rng.random((n_positions, 3)) * (1 - min_brightness) + min_brightness
-    return ListedColormap(colors)
+    cmap = ListedColormap(colors)
+    return cmap
 
 ################################################################################
 # %% Drawing helpers
@@ -39,7 +40,7 @@ def cmap_positions(n_positions=16, min_brightness=0.6, seed=0):
 
 def contour_labels(ax, labelmask, color, linewidth):
     """Draw the outline of each label; contours are computed per bounding box (fast)."""
-    for prop in regionprops(labelmask):
+    for prop in sk.measure.regionprops(labelmask):
         r0, c0, r1, c1 = prop.bbox
         r0, c0 = max(r0 - 1, 0), max(c0 - 1, 0)
         r1, c1 = min(r1 + 1, labelmask.shape[0]), min(c1 + 1, labelmask.shape[1])
@@ -63,10 +64,10 @@ def show_lum(ax, lum_disp, vmax=None):
 
 def label_positions(ax, labelmask, cmap):
     """Write the tray position (A1..D4) at the top-left of each plant."""
-    for prop in regionprops(labelmask):
+    for prop in sk.measure.regionprops(labelmask):
         ytop, xleft = prop.bbox[:2]
-        ax.text(xleft, ytop, grid_mapping(prop.label), color=cmap(prop.label), fontsize=4,
-                ha="center", va="center", bbox=TEXT_BBOX)
+        ax.text(xleft, ytop, ara_plant.grid_mapping(prop.label), color=cmap(prop.label),
+                fontsize=4, ha="center", va="center", bbox=TEXT_BBOX)
 
 ################################################################################
 # %% Per-image overview
@@ -120,7 +121,8 @@ def crop_slices(mask, margin, shape):
     rows, cols = np.nonzero(mask)
     r0, r1 = max(rows.min() - margin, 0), min(rows.max() + margin + 1, shape[0])
     c0, c1 = max(cols.min() - margin, 0), min(cols.max() + margin + 1, shape[1])
-    return slice(r0, r1), slice(c0, c1)
+    sl = (slice(r0, r1), slice(c0, c1))
+    return sl
 
 
 def hist_with_cutoffs(ax, values, cutoffs, xlabel, bins=100, xlim=None):
@@ -146,7 +148,7 @@ def plot_plant_detail(title, plant_label, img_bright, img_rgb, labelmask, color_
     with plt.rc_context(FIG_RC):
         fig = plt.figure(figsize=(16 / 2.54, 16 / 2.54))
         gs = fig.add_gridspec(2, 2, height_ratios=[1.2, 1])
-        fig.suptitle(f"{title} — {grid_mapping(plant_label)}")
+        fig.suptitle(f"{title} — {ara_plant.grid_mapping(plant_label)}")
 
         # Top left: RGB crop with plant contour, yellow tissue, expanded ROI
         ax = fig.add_subplot(gs[0, 0])
@@ -168,7 +170,8 @@ def plot_plant_detail(title, plant_label, img_bright, img_rgb, labelmask, color_
             ax.contour(roi_mask[sl], levels=[0.5], colors=COLOR_EXPANDED_ROI, linewidths=0.3)
             ax.contour(np.isin(spot_crop, spot_ids), levels=[0.5], colors=COLOR_SPOTS,
                        linewidths=0.3)
-            for prop in regionprops(np.where(np.isin(spot_crop, spot_ids), spot_crop, 0)):
+            spot_crop_plant = np.where(np.isin(spot_crop, spot_ids), spot_crop, 0)
+            for prop in sk.measure.regionprops(spot_crop_plant):
                 ax.text(prop.centroid[1], prop.centroid[0], str(prop.label), color="cyan",
                         fontsize=3, ha="left", va="bottom")
             ax.set_title("luminescence (background-subtracted)")

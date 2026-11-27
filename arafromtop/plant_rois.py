@@ -1,14 +1,21 @@
 
-"""From a raw U-Net segmentation to (up to) 16 plant ROIs, one per tray position."""
+"""From a raw U-Net segmentation to (up to) 16 plant ROIs, one per tray position.
+
+Labels corresponding to positions are assigned based on watershed with seeds
+corresponding to pot positions, and mask is cleaned up by connecting 
+neighboring regions and removing small parts.
+
+Logic designed by human author (legacy/pipelineclean_phase4_postprocessing_exploratory.py);
+code written by Claude Opus 5.5 (Anthropic), reviewed and edited by human author.
+"""
 
 ################################################################################
 # %% Libraries
 
+import imageio.v3 as iio
 import numpy as np
 
-from skimage.measure import label, regionprops
-from skimage.morphology import dilation, disk, remove_small_objects
-from skimage.segmentation import watershed
+import skimage as sk
 
 ################################################################################
 # %% Tray positions
@@ -16,18 +23,45 @@ from skimage.segmentation import watershed
 
 def grid_mapping(lbl_idx, n_cols=4):
     """Map label 1..16 to its tray position A1..D4 (row letter, column number)."""
+
+    # get row and col from lbl
     row = (lbl_idx - 1) // n_cols
     col = (lbl_idx - 1) % n_cols
-    return chr(65 + row) + str(col + 1)
+
+    # give name (e.g. B5)
+    position = chr(65 + row) + str(col + 1)
+    
+    return position
+
+
+def load_seedmask_positions(path, n_positions=16):
+    """Load the seed mask (8-bit PNG, editable in e.g. Fiji): 0 = none, 1..16 = tray positions."""
+
+    # Load seedmask
+    seedmask = iio.imread(path)
+
+    # Check correct format (2-D, integer value <= n_positions)
+    if seedmask.ndim != 2 or not np.all(np.isin(np.unique(seedmask), np.arange(n_positions + 1))):
+        raise ValueError(f"Seed mask {path} must be a 2-D label image with values 0..{n_positions}")
+      
+    return seedmask.astype(np.int32)
 
 ################################################################################
 # %% ROI steps
 
+def watershed_by_seeds(segmask, seedmask_positions, plant_classlabel=2):
+    """Assign regions to plant positions, regions not touching seeds get removed"""
 
-def watershed_by_seeds(segmask, seeds, label_class=2):
-    """Split the plant class into regions grown from the fixed tray-position seeds."""
-    plant_mask = segmask == label_class
-    return watershed(-1 * plant_mask, markers=seeds, mask=plant_mask)
+    # Get boolean plant mask
+    plant_mask = (segmask == plant_classlabel)
+
+    # Apply the watershed
+    labelmask_shed = sk.segmentation.watershed(
+                        -1 * plant_mask, 
+                        markers=seedmask_positions, 
+                        mask=plant_mask)
+    
+    return labelmask_shed
 
 
 def clean_labelmask(labelmask_shed, dilation_radius=10, min_size_cluster=600,
@@ -36,32 +70,58 @@ def clean_labelmask(labelmask_shed, dilation_radius=10, min_size_cluster=600,
 
     Fragments within `dilation_radius` of each other are grouped into one cluster;
     clusters with fewer than `min_size_cluster` plant pixels (undilated area) are
-    removed. Then, plants with an area below `min_size_wholeplant` are removed.
+    removed. 
+    
+    Regions of different plants could be joined, to safeguard against
+    plants keeping neighboring artifacts from other pots alive, a second
+    pass size filter is applied.
     """
 
-    # Group plant pixels that are close together: label the dilated mask, and
-    # give each (undilated) plant pixel the id of its cluster
-    clusters_dilated = label(dilation(labelmask_shed > 0, disk(dilation_radius)))
+    # Connect close plant parts -- dilate and relabel
+    mask_dilated = sk.morphology.dilation(labelmask_shed > 0, sk.morphology.disk(dilation_radius))
+    clusters_dilated = sk.measure.label(mask_dilated)
+    # Then create a mask identical to labelmask_shed, but renumbered 
+    # according to joined regions ("clusters")
     labelmask_clusters = np.zeros_like(labelmask_shed)
     labelmask_clusters[labelmask_shed > 0] = clusters_dilated[labelmask_shed > 0]
 
-    # Remove small clusters (area counted on undilated pixels), keep the
-    # watershed labels for the rest
-    mask_tokeep = remove_small_objects(labelmask_clusters, min_size=min_size_cluster) > 0
+    # Remove "clusters" with little area
+    clusters_kept = sk.morphology.remove_small_objects(labelmask_clusters,
+                                                       min_size=min_size_cluster)
+    mask_tokeep = clusters_kept > 0
+
+    # Then recreate original mask but only with kept regions
     labelmask_cleaned = np.zeros_like(labelmask_shed)
     labelmask_cleaned[mask_tokeep] = labelmask_shed[mask_tokeep]
 
-    # Second pass: remove whole plants that are too small
-    for prop in regionprops(labelmask_cleaned):
-        if prop.area < min_size_wholeplant:
-            labelmask_cleaned[labelmask_cleaned == prop.label] = 0
+    # Second pass: remove small labels (per tray position) within kept clusters, e.g. an
+    # artifact in an empty pot that survived because it's close to a neighbouring plant
+    labelmask_plants = sk.morphology.remove_small_objects(labelmask_cleaned,
+                                                          min_size=min_size_wholeplant)
 
-    return labelmask_cleaned
+    return labelmask_plants
 
 
-def segmentation_to_plant_rois(segmask, seeds, label_class=2, dilation_radius=10,
-                               min_size_cluster=600, min_size_wholeplant=400):
+def segmentation_to_plant_rois(
+        segmask, seedmask_positions, 
+        plant_classlabel=2, dilation_radius=10, 
+        min_size_cluster=600, min_size_wholeplant=400
+        ):    
     """Return a label mask with label = tray position (1..16) and 0 = not a plant."""
-    labelmask_shed = watershed_by_seeds(segmask, seeds, label_class)
-    return clean_labelmask(labelmask_shed, dilation_radius, min_size_cluster,
-                           min_size_wholeplant)
+
+    # Watershed according to seeds that can be related to tray positions (A1..D4)
+    # Removes regions that don't touch the seed
+    labelmask_shed = watershed_by_seeds(
+        segmask=segmask, 
+        seedmask_positions=seedmask_positions, 
+        plant_classlabel=plant_classlabel)
+
+    # Remove isolated small parts
+    labelmask_plants = clean_labelmask(
+        labelmask_shed=labelmask_shed, 
+        dilation_radius=dilation_radius, 
+        min_size_cluster=min_size_cluster, 
+        min_size_wholeplant=min_size_wholeplant
+        )
+    
+    return labelmask_plants

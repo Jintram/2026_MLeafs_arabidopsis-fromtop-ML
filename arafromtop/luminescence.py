@@ -15,10 +15,9 @@ import imageio.v3 as iio
 import numpy as np
 import scipy.ndimage as ndi
 
-from skimage.measure import label
-from skimage.segmentation import expand_labels, relabel_sequential
+import skimage as sk
 
-from arafromtop import calibration
+import arafromtop.calibration as ara_cal
 
 ################################################################################
 # %% Loading and background
@@ -32,21 +31,27 @@ def load_lum(path):
     """
     img = iio.imread(path)
     if img.ndim == 2:
-        return img.astype(np.int32), False
+        lum = img.astype(np.int32)
+        return lum, False
 
     # Check whether R, G, B are identical
     rgb = img[..., :3]
     channels_differ = not (np.array_equal(rgb[..., 0], rgb[..., 1])
                            and np.array_equal(rgb[..., 0], rgb[..., 2]))
+
+    # Use channel 0, or the mean of R, G, B if they differ
     if channels_differ:
         warnings.warn(f"R, G, B differ in ES image {path}; using their mean.")
-        return np.rint(rgb.mean(axis=2)).astype(np.int32), True
-    return rgb[..., 0].astype(np.int32), False
+        lum = np.rint(rgb.mean(axis=2)).astype(np.int32)
+    else:
+        lum = rgb[..., 0].astype(np.int32)
+    return lum, channels_differ
 
 
 def estimate_background(lum):
     """Background = the mode of the image (most pixels are background)."""
-    return int(np.bincount(lum.ravel()).argmax())
+    background = int(np.bincount(lum.ravel()).argmax())
+    return background
 
 
 def estimate_cutoff(lum, mode, n_sigma=5, min_sigma_frac=0.1):
@@ -62,8 +67,8 @@ def estimate_cutoff(lum, mode, n_sigma=5, min_sigma_frac=0.1):
     sigma_below = float(np.sqrt(np.mean((below - mode) ** 2))) if below.size else 0.0
 
     # Cutoff, with the minimum sigma as fallback
-    cutoff = mode + max(n_sigma * sigma_below, n_sigma * min_sigma_frac * mode)
-    return float(cutoff), sigma_below
+    cutoff = float(mode + max(n_sigma * sigma_below, n_sigma * min_sigma_frac * mode))
+    return cutoff, sigma_below
 
 ################################################################################
 # %% Spot detection and assignment
@@ -78,7 +83,7 @@ def detect_spots(lum, cutoff, min_spot_size=2, max_spot_size=500, exclude_oversi
     """
 
     # Threshold and label connected pixels
-    spot_lbl = label(lum > cutoff)
+    spot_lbl = sk.measure.label(lum > cutoff)
     sizes = np.bincount(spot_lbl.ravel())
     sizes[0] = 0
 
@@ -90,7 +95,9 @@ def detect_spots(lum, cutoff, min_spot_size=2, max_spot_size=500, exclude_oversi
     to_remove[0] = False
     spot_lbl[to_remove[spot_lbl]] = 0
 
-    return relabel_sequential(spot_lbl)[0], oversized
+    # Renumber the remaining spots 1..n
+    spot_lbl = sk.segmentation.relabel_sequential(spot_lbl)[0]
+    return spot_lbl, oversized
 
 
 def expand_plant_rois(labelmask, assign_radius=15):
@@ -100,7 +107,8 @@ def expand_plant_rois(labelmask, assign_radius=15):
     pixels are kept, and gaps between neighbouring plants are split by the
     nearest plant edge, so neighbours don't overlap.
     """
-    return expand_labels(labelmask, distance=assign_radius)
+    labelmask_expanded = sk.segmentation.expand_labels(labelmask, distance=assign_radius)
+    return labelmask_expanded
 
 
 def assign_spots_to_plants(spot_lbl_es, plant_lbl_es):
@@ -135,9 +143,9 @@ def spot_table(lum, background, spot_lbl_es, spot_lbl_rgb):
     area_rgb = np.bincount(spot_lbl_rgb.ravel(), minlength=n_spots + 1)[1:]
     if n_spots == 0:
         return {"area_px": area_rgb, "median": np.array([]), "mean": np.array([])}
-    return {"area_px": area_rgb,
-            "median": np.asarray(ndi.median(lum_sub, spot_lbl_es, idx)),
-            "mean": np.asarray(ndi.mean(lum_sub, spot_lbl_es, idx))}
+    medians = np.asarray(ndi.median(lum_sub, spot_lbl_es, idx))
+    means = np.asarray(ndi.mean(lum_sub, spot_lbl_es, idx))
+    return {"area_px": area_rgb, "median": medians, "mean": means}
 
 
 def plant_lum_stats(lum, background, spot_lbl_es, spots, spot_to_plant, plant_lbl_es,
@@ -158,7 +166,7 @@ def plant_lum_stats(lum, background, spot_lbl_es, spots, spot_to_plant, plant_lb
     has_spots = spot_ids.size > 0
 
     spot_area = int(areas.sum())
-    return {
+    stats = {
         "nr_spots": int(spot_ids.size),
         "spot_area_px": spot_area,
         "spot_area_pct": 100 * spot_area / plant_area_px if plant_area_px > 0 else np.nan,
@@ -173,12 +181,13 @@ def plant_lum_stats(lum, background, spot_lbl_es, spots, spot_to_plant, plant_lb
         "lum_max": int(lum[roi].max()) if roi.any() else np.nan,
         "lum_integrated": float(lum_sub[roi].sum()) if roi.any() else np.nan,
     }
+    return stats
 
 ################################################################################
 # %% Whole-image pipeline
 
 
-def analyse_luminescence(path_lum, labelmask, tf, params):
+def analyse_luminescence(path_lum, labelmask, matrix_lum_to_rgb, params):
     """Detect spots and assign them to plants; return a dict with all intermediate results.
 
     `labelmask` is the plant ROI mask in the RGB frame; `params` holds n_sigma,
@@ -194,11 +203,11 @@ def analyse_luminescence(path_lum, labelmask, tf, params):
     # Spots in the ES frame, and their labels in the RGB frame (for areas, plots)
     spot_lbl_es, oversized = detect_spots(lum, cutoff, params["min_spot_size"],
                                           params["max_spot_size"], params["exclude_oversized"])
-    spot_lbl_rgb = calibration.warp_labels_to_rgb(spot_lbl_es, tf, labelmask.shape)
+    spot_lbl_rgb = ara_cal.warp_labels_to_rgb(spot_lbl_es, matrix_lum_to_rgb, labelmask.shape)
 
     # Expanded plant ROIs (RGB frame), warped to the ES frame, and spot assignment
     labelmask_expanded = expand_plant_rois(labelmask, params["assign_radius"])
-    plant_lbl_es = calibration.warp_labels_to_es(labelmask_expanded, tf, lum.shape)
+    plant_lbl_es = ara_cal.warp_labels_to_es(labelmask_expanded, matrix_lum_to_rgb, lum.shape)
     spot_to_plant = assign_spots_to_plants(spot_lbl_es, plant_lbl_es)
 
     # Image-level values
